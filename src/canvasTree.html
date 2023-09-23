@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Canvas Tree</title>
+	<style>
+		#canvas {
+			/*border: black 1px dotted;*/
+			margin: 0 auto;
+			display: block;
+		}
+	</style>
+</head>
+<body>
+	<canvas id="canvas"></canvas>
+</body>
+<script type="text/javascript">
+	data = [
+		{
+			"text": {
+				"title": "新手级回复",
+				"contents": ["NOVICE RESTORATION","REQUIRES: N/A","施展新手级回复系法术所需魔力减半"]
+			},
+			"parent": "$ROOT$",// 保留命名,虚拟根节点名称
+			"associate": "",
+			"link": ""
+		},
+		{
+			"text": {
+				"title": "喘息",
+				"contents": ["RESPITE", "REQUIRES: 40", "治疗法术会同时回复精力"]
+			},
+			"parent": "新手级回复",
+			"associate": "",
+			"link": ""
+		},
+		{
+			"text": {
+				"title": "学徒级回复",
+				"contents": ["APPRENTICE RESTORATION", "REQUIRES: 25", "施展学徒级回复系法术所需魔力减半"]
+			},
+			"parent": "新手级回复",
+			"associate": "",
+			"link": ""
+		},
+		{
+			"text": {
+				"title": "双手施法",
+				"contents": ["RESTORATION DUAL CASTING", "REQUIRES: 20", "双手施法状态集气后法术效力增强"]
+			},
+			"parent": "新手级回复",
+			"associate": "",
+			"link": ""
+		},
+		{
+			"text": {
+				"title": "再生",
+				"contents": ["REGENERATION", "REQUIRES: 20", "治疗法术增加50%治疗量"]
+			},
+			"parent": "喘息",
+			"associate": "",
+			"link": ""
+		},
+		{
+			"text": {
+				"title": "防御吸收",
+				"contents": ["WARD ABSORB", "REQUIRES: 60", "被法术击中时防御力场会充能魔力值"]
+			},
+			"parent": "喘息",
+			"associate": "",
+			"link": ""
+		},
+		{
+			"text": {
+				"title": "老手级回复",
+				"contents": ["ADEPT RESTORATION", "REQUIRES: 50","施展老手级回复系法术所需魔力减半"]
+			},
+			"parent": "学徒级回复",
+			"associate": "",
+			"link": ""
+		},
+		{
+			"text": {
+				"title": "复原",
+				"contents": ["RECOVERY", "REQUIRES: 30", "魔力恢复速度提升25%"]
+			},
+			"parent": "学徒级回复",
+			"associate": "",
+			"link": ""
+		},
+		{
+			"text": {
+				"title": "死灵术",
+				"contents": ["NECROMAGE", "REQUIRES: 70", "全法术对亡灵生物的效果强化"]
+			},
+			"parent": "再生",
+			"associate": "",
+			"link": ""
+		},
+		{
+			"text": {
+				"title": "专家级回复",
+				"contents": ["EXPERT RESTORATION", "REQUIRES: 75", "施展专家级回复系法术所需魔力减半"]
+			},
+			"parent": "老手级回复",
+			"associate": "",
+			"link": ""
+		},
+		{
+			"text": {
+				"title": "避死",
+				"contents": ["AVOID DEATH", "REQUIRES: 90","每天一次，在生命值低于10%时","自动施法恢复250点生命值"]
+			},
+			"parent": "复原",
+			"associate": "",
+			"link": ""
+		},
+		{
+			"text": {
+				"title": "大师级回复",
+				"contents": ["MASTER RESTORATION", "REQUIRES: 100","施展大师级回复系法术所需魔力减半"]
+			},
+			"parent": "专家级回复",
+			"associate": "",
+			"link": ""
+		},
+	]
+
+	
+
+	//  单box相关参数
+	const font_size = 15
+	const title_font = "bold "+font_size+"px Franklin Gothic"
+	const content_font = font_size+"px Franklin Gothic"
+	const content_linespace = 2 // 内容文本行间距
+	const text_padding = 10 //文本左右及下边距
+	const content_padding_top = 10
+	const content_padding_bottom = 17
+	const title_h = 34
+	const slot_h = 8
+	// box间参数
+	const box_horizon_min_space = 70 // 盒子间水平最小间距
+	const box_vertial_min_space = 65 // 盒子的最小行间距
+	// box tree参数
+	const tree_margin_top = 60 // box树的上边距
+	const tree_margin_bottom = 80
+	const tree_margin_left_and_rigth = 40
+	// 连接线参数
+	const connect_padding = 14 // 连接点在box边上的边距
+	const side_arrow_space = 10 // 侧边箭头间距
+	const arrow_back = 4 // 箭头线止点后移量
+	const associate_text_padding = 5 // 关联字段文字在背景色块中的内边距
+	// 颜色
+	// [关联文字]
+	const assoc_bg_color = "rgba(208, 231, 210, 0.5)"
+	const assoc_text_color = "rgb(97, 130, 100)"
+	// [箭头]
+	const arrow_head_color = "rgb(8, 131, 149)"
+	const arrow_curve_color = arrow_head_color
+	// [盒子]
+	const box_bg_color = "rgb(100, 204, 197)"
+	const box_border_color = arrow_head_color
+	const box_title_color = "rgb(255, 255, 255)"
+
+
+	
+	const canvas = document.getElementById("canvas")
+	const ctx = canvas.getContext('2d')
+
+	var qsmap = getQuickSearchMap(data)
+	var child_map = qsmap.child // 记录节点的全部子节点
+	var parent_map = qsmap.parent // 记录节点的父节点
+	var text_map = qsmap.text // 记录节点的文本内容
+	var associate_map = qsmap.associate // 记录节点指向父节点的关联字段名称
+	var link_map = qsmap.link // 记录节点点击跳转页面的相对路径
+	var box_layout = { "$ROOT$": {l:canvas.width/2, t:0, w:0, h:0 }} // 虚拟根节点位于画布顶端正中
+
+	var box_hierarchy = [["$ROOT$"]] // 遍历树时存储节点，同层存储在同一子数组中.用于逐层遍历及记录同层节点
+	
+	var prev_bottom = tree_margin_top - box_vertial_min_space // 上一行节点的最低坐标,根节点与下一节点无需间距
+
+	
+
+
+
+
+	measureBoxLayout()
+	measureTreeLayout()
+	
+	for(let title in box_layout){
+		drawBox(title)
+		drawConnectionLine(title)
+	}
+	addListener()
+
+	
+
+
+
+	// 绘制box的连接线
+	function drawConnectionLine(box_name){
+		if(box_name === "$ROOT$") return // 父节点是虚拟根节点，则不绘制连接线
+		if(!(box_name in child_map) || child_map[box_name].length == 0) return // 无子节点无需绘制
+		let p_l = box_layout[box_name].l+connect_padding
+		let p_r = box_layout[box_name].l+box_layout[box_name].w-connect_padding
+		// 左右临界点，确定线的止点在侧边还是底边，暂定梯形斜度为45度
+		let cri_l =  box_layout[box_name].l-box_vertial_min_space 
+		let cri_r = box_layout[box_name].l+box_layout[box_name].w+box_vertial_min_space
+		// 分别存放止点在父节点的左侧边，底边，右侧边的子节点
+		let left_side = []
+		let bottom_side = []
+		let right_side = []
+		for(let child_name of child_map[box_name]){
+			let start = box_layout[child_name].l + box_layout[child_name].w/2
+			if(start < cri_l) left_side.push(child_name)
+			if(start >= cri_l && start <= cri_r) bottom_side.push(child_name)
+			if(start > cri_r) right_side.push(child_name)
+		}
+		for(let b_box of bottom_side){
+			let start_x = box_layout[b_box].l + box_layout[b_box].w/2
+			let end_x = (start_x-cri_l)*(p_r-p_l)/(cri_r-cri_l)+p_l
+			let start = {x:start_x,y:box_layout[b_box].t}
+			let end = {x:end_x,y:box_layout[box_name].t+box_layout[box_name].h+arrow_back}
+			drawArrowCurve(start,end,associate_map[b_box])
+		}
+		let ls_len = left_side.length
+		// 根据侧边数量确定箭头间距
+		if(ls_len > 1){
+			var space_l = Math.min(side_arrow_space,(box_layout[box_name].h-2*connect_padding)/(ls_len-1))
+		}else{
+			// 0或1并到同一分支。1时end_y初值赋值计算也适用，0时不适用但用不到end_y
+			var space_l = side_arrow_space
+		}
+		let end_y = box_layout[box_name].t+box_layout[box_name].h-connect_padding-((ls_len-1)*space_l)
+		for(let l_box of left_side){
+			let start_x = box_layout[l_box].l + box_layout[l_box].w/2
+			let end_x =  box_layout[box_name].l - arrow_back
+			let start = {x:start_x, y:box_layout[l_box].t}
+			let end = {x:end_x, y:end_y}
+			drawArrowCurve(start,end,associate_map[l_box])
+			end_y += space_l
+		}
+		// 右侧边同理
+		let rs_len = right_side.length
+		if(rs_len > 1){
+			var space_r = Math.min(side_arrow_space,(box_layout[box_name].h-2*connect_padding)/(rs_len-1))
+		}else{
+			var space_r = side_arrow_space
+		}
+		end_y = box_layout[box_name].t+box_layout[box_name].h-connect_padding
+		for(let r_box of right_side){
+			let start_x = box_layout[r_box].l + box_layout[r_box].w/2
+			let end_x =  box_layout[box_name].l +box_layout[box_name].w + arrow_back
+			let start = {x:start_x, y:box_layout[r_box].t}
+			let end = {x:end_x, y:end_y}
+			drawArrowCurve(start,end,associate_map[r_box])
+			end_y -= space_r
+		}
+	}
+	// 绘制连接线上关联字段文字
+	function drawAssociateText(text,center){
+		let padding = associate_text_padding
+		ctx.font = content_font
+		let text_width = ctx.measureText(text).width
+		if(text_width === 0) return
+		// 文字的背景区域
+		let area_w = text_width + padding*2
+		let area_h = font_size + padding*2
+		let area_l = center.x - area_w/2
+		let area_t = center.y - area_h/2
+		ctx.fillStyle = assoc_bg_color
+		ctx.fillRect(area_l, area_t, area_w, area_h)
+
+		ctx.textAlign = "center"
+		ctx.fillStyle = assoc_text_color
+		ctx.fillText(text,center.x,area_t+area_h-padding-2)
+	}
+	// 绕原点坐标旋转
+	function rotate(point,sin_theta,cos_theta){
+		// 注意顺时针旋转为正,与数学坐标系相反
+		let rx = cos_theta*point.x+sin_theta*point.y
+		let ry = cos_theta*point.y-sin_theta*point.x
+		return { x:rx,y:ry }
+	}
+	// 曲线终点的切线为箭杆 箭杆头为曲线终点,箭杆尾为曲线控制点
+	function drawArrowHead(head,tail){
+		let t = { x:0, y:0 } //箭头顶点,初始位置在原点,使得旋转矩阵简单
+		let h = 20 //三角形高度
+		let delt_h = 15 // head与b的距离
+		let phi = 20 // 等腰三角形顶角的一半
+		let panning = h*Math.tan(phi*Math.PI/180) // 偏移量
+		// 箭头尾部三个端点
+		let a = { x:t.x-panning, y:t.y+h }
+		let b = { x:t.x, y:t.y+delt_h }
+		let c = { x:t.x+panning, y:t.y+h }
+		// 旋转到切线方向
+		let v = {x:tail.x-head.x,y:tail.y-head.y} // 切线向量,为方便计算向量方向与箭杆方向相反即用尾减头
+		let v_norm = Math.sqrt(Math.pow(v.x,2)+Math.pow(v.y,2)) // 向量的模
+		// 与y轴夹角
+		let sin_theta = v.x/v_norm
+		let cos_theta = v.y/v_norm
+		a = rotate(a,sin_theta,cos_theta)
+		b = rotate(b,sin_theta,cos_theta)
+		c = rotate(c,sin_theta,cos_theta)
+		// 平移,延切线方向多向前平移3个像素,使箭头完全盖住箭杆
+		let ahead_value = 3
+		t = { x:t.x+head.x-ahead_value*sin_theta, y:t.y+head.y-ahead_value*cos_theta }
+		a = { x:a.x+head.x-ahead_value*sin_theta, y:a.y+head.y-ahead_value*cos_theta }
+		b = { x:b.x+head.x-ahead_value*sin_theta, y:b.y+head.y-ahead_value*cos_theta }
+		c = { x:c.x+head.x-ahead_value*sin_theta, y:c.y+head.y-ahead_value*cos_theta }
+
+		ctx.lineWidth = 2
+		ctx.fillStyle = arrow_head_color
+		ctx.beginPath()
+		ctx.moveTo(t.x,t.y)
+		ctx.lineTo(a.x,a.y)
+		ctx.lineTo(b.x,b.y)
+		ctx.lineTo(c.x,c.y)
+		ctx.closePath()
+		ctx.fill()
+	}
+	function drawArrowCurve(start,end,associate_text){
+		// 绘制2次贝塞尔曲线 ,先确定贝塞尔曲线控制点坐标
+		let control = { x:start.x, y:(start.y+end.y)/2 }
+		ctx.lineWidth = 2
+		ctx.strokeStyle = arrow_curve_color
+		ctx.beginPath()
+		ctx.moveTo(start.x,start.y)
+		ctx.quadraticCurveTo(control.x,control.y,end.x,end.y)
+		ctx.stroke()
+
+		// 绘制箭头
+		drawArrowHead(end,control)
+
+		// 绘制关联字段文本,根据2次贝塞尔曲线参数方程求解其竖直中点,作为文本区域中心点
+		let mid = { x:0, y:(start.y + end.y)/2 }
+		var a = end.y-2*control.y+start.y
+		var b = 2*(control.y-start.y)
+		var c = start.y-mid.y
+		var t
+		if(a==0){
+			t = (mid.y-start.y)/(2*(control.y-start.y))
+		}else{
+			t = (-Math.sqrt(Math.pow(b,2)-4*a*c)-b)/(a*2)
+		}
+		mid.x = Math.pow(1-t,2)*start.x+2*(1-t)*t*control.x+Math.pow(t,2)*end.x
+		drawAssociateText(associate_text,mid)
+
+	}
+	function measureBoxLayout(){
+		let parent_pool = box_hierarchy[box_hierarchy.length-1]
+		if(parent_pool.length === 0)
+			return
+		box_hierarchy.push([]) // 空数组存放下一层及全部子节点
+		let max_height = 0 // 每一行盒子的最大高度
+		for(let i in parent_pool){
+			let parent_key = parent_pool[i]
+			if((parent_key in child_map) && (child_map[parent_key].length !== 0)){
+				let total_width = 0 // 父节点的所有子节点的总宽度及盒子的最大高度
+				for(let child_ele of child_map[parent_key]){
+					let bsize  = measureBoxSize(text_map[child_ele])
+					box_layout[child_ele] = { l:0 , t:0, w:bsize.width, h:bsize.height }
+					total_width += bsize.width
+					box_hierarchy[box_hierarchy.length-1].push(child_ele)
+					max_height = Math.max(max_height,bsize.height)
+				}
+				total_width += (child_map[parent_key].length-1) * box_horizon_min_space // 计算盒间距到总宽度
+				group_left = box_layout[parent_key].l+box_layout[parent_key].w/2-total_width/2 // 子节点组最左侧坐标，该计算使得子节点组中心和父节点中心对齐，即父节点位于子节点组上方中心
+
+				// 更新子节点组l坐标赋值
+				for(let j in child_map[parent_key]){
+					node_name = child_map[parent_key][j]
+					node = box_layout[node_name]
+					if(j == 0){
+						node.l = group_left
+					}else{
+						prev_node = box_layout[child_map[parent_key][j-1]]
+						node.l = prev_node.l + prev_node.w+ box_horizon_min_space
+					}
+				}
+				// 若父节点不是第一节点,检查当前子节点组与前一节点间距是否小于最小盒间距
+				if(i != 0){
+					// 检查是否需要调整，需要则调整
+					let fc_name = child_map[parent_key][0] // 当前节点的第一子节点名称
+					var lb_name = getLeftBro(fc_name) // 第一子节点的左兄弟节点名称
+					if(lb_name == null) continue
+					var fc = box_layout[fc_name]
+					var lb = box_layout[lb_name]
+					if(fc.l-(lb.l+lb.w) < box_horizon_min_space){
+						panning = lb.l+lb.w + box_horizon_min_space
+						adjust(fc_name, panning)
+					}
+				}
+			}
+		}
+		// 更新同一行所有节点的h
+		let middle_line = prev_bottom + box_vertial_min_space + max_height/2
+		prev_bottom = middle_line + max_height/2
+		for(let box_name of box_hierarchy[box_hierarchy.length-1]){
+			let box = box_layout[box_name]
+			box.t = middle_line - box.h/2
+		}
+		measureBoxLayout()
+	}
+
+	function measureTreeLayout(){
+		var tree_size = measureTreeSize()
+		// 确定画布的宽度和高度
+		canvas.width = tree_size.width + tree_margin_left_and_rigth*2
+		canvas.height = tree_size.height + tree_margin_bottom
+		var panning = tree_size.left - tree_margin_left_and_rigth
+		for(let box_name in box_layout){
+			box_layout[box_name].l -= panning
+		}
+	}
+	// 计算box树的最大宽度和高度
+	function measureTreeSize(){
+		let min_horizon = 0
+		let max_horizon = 0
+		let min_vertical = 0
+		let max_vertical = 0
+		for(let i in box_hierarchy){
+			let line = box_hierarchy[i]
+			if(line.length == 0) continue
+			let first = box_layout[line[0]]
+		    let last = box_layout[line[line.length-1]]
+			if(i == 0){
+				min_horizon = first.l
+				max_horizon = last.l + last.w
+				
+				for(let j in line){
+					if(j == 0){
+						min_vertical = box_layout[line[j]].t
+					}else{
+						min_vertical = Math.min(min_vertical,box_layout[line[j]].t)
+					}
+				}
+			}else{
+				min_horizon = Math.min(min_horizon, first.l)
+				max_horizon = Math.max(max_horizon,(last.l + last.w))
+				for(let j in line){
+					max_vertical = Math.max(max_vertical,box_layout[line[j]].t+box_layout[line[j]].h)
+				}
+			}
+		}
+		return { width:max_horizon-min_horizon,height: max_vertical-min_vertical,left:min_horizon,top:min_vertical}
+	}
+	// panning 为node_name节点指定的移动量
+	function adjust(node_name,panning=null){
+		let line_first = adjustLine(node_name,panning)
+		if(line_first in parent_map){
+			 adjust(parent_map[line_first]) // 调整父级受影响节点
+		}else{
+			return
+		}
+	}
+	// 调整节点及其全部右兄弟节点,并返回第一节点名称.panning为需要移动到的坐标,有值时按值平移第一节点.无值时自行计算
+	function adjustLine(node_name,panning=null){
+		let targets = getAllRightBro(node_name)
+		for(let i in targets){
+			if(i == 0 && panning){ // 是否指定了第一节点的平移量
+				box_layout[targets[i]].l = panning
+			}else{
+				let children = getChildInBoxLayout(targets[i])
+				if(children.length != 0){ // 是否有已计算过的子节点
+					let first = box_layout[children[0]] // 第一子节点
+					let last = box_layout[children[children.length-1]] // 最后子节点
+					let children_middle = (first.l+last.l+last.w)/2
+					box_layout[targets[i]].l = children_middle - (box_layout[targets[i]].w)/2
+				}else{
+					let left_name = getLeftBro(targets[i])
+					if(left_name){ // 是否有左兄弟节点
+						let left = box_layout[left_name]
+						if(box_layout[targets[i]].l -(left.l+left.w) < box_horizon_min_space){
+							// 与左兄弟节点距离是否小于最小间隔
+							box_layout[targets[i]].l = left.l+left.w + box_horizon_min_space
+						}
+					}
+				}
+			}
+		}
+		return node_name
+	}
+	// 获取节点的已存入box_layout中的子节点.未存入的节点因不需要做位置调整,所以不必获取
+	function getChildInBoxLayout(node_name){
+		let res = []
+		if(node_name in child_map){
+			child_arr = child_map[node_name]
+			res = child_arr.filter(function(v){ return Object.keys(box_layout).indexOf(v) > -1 })
+		}
+		return res
+	}
+	// 获取当前节点及其全部右兄弟节点
+	function getAllRightBro(node_name){
+		let res = []
+		let isMatch = false // 是否已找到目标节点
+		for(node_line of box_hierarchy){
+			for(let i in node_line){
+				if(node_line[i] === node_name) isMatch = true
+				if(isMatch) res.push(node_line[i])
+			}
+			if(isMatch) return res
+		}
+	}
+	// 获取左兄弟节点名称
+	function getLeftBro(node_name){
+		for(node_line of box_hierarchy){
+			for(let i in node_line){
+				if(node_line[i] === node_name && i != 0){
+					return node_line[i-1]
+				}
+			}
+		}
+		return null // 返回null表示无左兄弟节点
+	}
+	function measureBoxSize(text){
+		ctx.font = title_font
+		title_width = ctx.measureText(text.title).width
+		ctx.font = content_font
+		contents_max_width = Math.max(...text.contents.map(c_text => ctx.measureText(c_text).width))
+		text_max_width = Math.max(title_width,contents_max_width)
+		box_width = text_max_width + text_padding * 2
+		box_height = title_h + slot_h + content_padding_top
+		 + (font_size + content_linespace) * text.contents.length + content_padding_bottom
+		 return { width: box_width, height: box_height }
+	}
+	// 快速查询表，记录节点关系及节点的文本内容等信息,方便在树遍历中快速查询
+	function getQuickSearchMap(data){
+		var child_map = {}
+		var parent_map = {}
+		var text_map = {}
+		var associate_map = {}
+		var link_map = {}
+		for(let ele of data){
+			// 为数据字典添加数据
+			text_map[ele['text']['title']] = ele['text']
+			// 为父节点表添加数据
+			parent_map[ele['text']['title']] = ele['parent']
+			// 为子节点表添加数据
+			if(!(ele["parent"] in child_map)){
+				child_map[ele['parent']] = []
+			}
+			child_map[ele['parent']].push(ele['text']['title'])
+			// 为关联字段表添加数据
+			associate_map[ele['text']['title']] = ele['associate']
+			// 为链接表添加数据
+			link_map[ele['text']['title']] = ele['link']
+		}
+		return { child: child_map, parent: parent_map, text: text_map, associate: associate_map, link:link_map}
+	}
+
+	function drawBox(title){
+		// 避免产生错误，即未生成布局数据前调用或者输入了错误的title 
+		if(!(title in box_layout)||!(title in text_map)) return 
+		
+		var r = box_layout[title]
+		var text = text_map[title]
+		
+		// 填充框背景色
+		ctx.fillStyle = box_bg_color
+		ctx.fillRect(r.l, r.t, r.w, r.h)
+		// 绘制框
+		ctx.lineWidth = 2
+		ctx.strokeStyle = box_border_color
+		ctx.beginPath()
+		ctx.rect(r.l, r.t, r.w, r.h)
+		ctx.moveTo(r.l,r.t+title_h)
+		ctx.lineTo(r.l+r.w,r.t+title_h)
+		ctx.moveTo(r.l,r.t+title_h+slot_h)
+		ctx.lineTo(r.l+r.w,r.t+title_h+slot_h)
+		ctx.stroke()
+		// 绘制标题
+		ctx.font = title_font
+		ctx.textAlign = "center"
+		ctx.fillStyle = box_title_color
+		ctx.fillText(text.title,r.l+r.w/2,r.t+title_h-text_padding)
+		// 绘制内容
+		ctx.textAlign = "left"
+		ctx.font = content_font
+		c_h = r.t+title_h+slot_h+content_padding_top+font_size // 内容文本的初始高度
+		for(let c of text.contents){
+			ctx.fillText(c,r.l+text_padding,c_h)
+			c_h = c_h + font_size + content_linespace
+		}
+	}
+	
+	function addListener(){
+		canvas.addEventListener('click',function(e){
+			var is_in_box = false
+			for(let title in box_layout){
+				var r = box_layout[title]
+				is_in_box = isInBox({x:e.layerX,y:e.layerY},{l:r.l,r:r.l+r.w,t:r.t,b:r.t+r.h})
+				if(is_in_box){
+					window.location.href = link_map[title]
+					break
+				} 
+			}
+		})
+		canvas.onmousemove = function(e){
+			let is_in_box = false
+			for(let title in box_layout){
+				let r = box_layout[title]
+				is_in_box = isInBox({x:e.layerX,y:e.layerY},{l:r.l,r:r.l+r.w,t:r.t,b:r.t+r.h})
+				if(is_in_box){
+					break
+				}
+			}
+			if(is_in_box){
+				canvas.style.cursor = "pointer"
+			}else{
+				canvas.style.cursor = "default"
+			}
+		}
+	}
+	
+	function isInBox(clickPosition,boxArea){
+		let x = clickPosition.x
+		let y = clickPosition.y
+		if(x >= boxArea.l && x <= boxArea.r && y >= boxArea.t && y <= boxArea.b){
+			return true
+		}else{
+			return false
+		}
+	}
+</script>
+</html>
